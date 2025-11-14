@@ -19,7 +19,7 @@ const SWAGGER_URL = `http://localhost:${PORT}/api-docs`;
 app.use("/rides", rideRoutes);
 
 app.use("/", (req, res) => {
-  res.send("🚗 Servicio de Reservas y Viajes (Ride Service) está funcionando");
+  res.send("Servicio de Reservas y Viajes (Ride Service) está funcionando");
 });
 
 // Health check endpoint - DEBE IR ANTES de otras rutas
@@ -41,13 +41,13 @@ async function connectWithRetry(maxRetries = 10, delay = 5000) {
       console.log("Conectado a MySQL exitosamente");
       return true;
     } catch (error) {
-      console.error(`❌ Error conectando a MySQL (intento ${attempt}):`, error.message);
+      console.error(`Error conectando a MySQL (intento ${attempt}):`, error.message);
       
       if (attempt < maxRetries) {
-        console.log(`⏳ Reintentando en ${delay / 1000} segundos...`);
+        console.log(`Reintentando en ${delay / 1000} segundos...`);
         await new Promise(resolve => setTimeout(resolve, delay));
       } else {
-        console.error("❌ No se pudo conectar a MySQL después de múltiples intentos");
+        console.error("No se pudo conectar a MySQL después de múltiples intentos");
         throw error;
       }
     }
@@ -70,12 +70,12 @@ async function connectWithRetry(maxRetries = 10, delay = 5000) {
 
     // Levantar servidor
     app.listen(PORT, () => {
-      console.log(`🚗 Ride Service corriendo en puerto ${PORT}`);
-      console.log(`📘 Documentación Swagger: \x1b[36m${SWAGGER_URL}\x1b[0m`);
-      console.log(`✅ Servicio listo para recibir solicitudes`);
+      console.log(`Ride Service corriendo en puerto ${PORT}`);
+      console.log(`Documentación Swagger: \x1b[36m${SWAGGER_URL}\x1b[0m`);
+      console.log(`Servicio listo para recibir solicitudes`);
     });
   } catch (error) {
-    console.error("❌ Error fatal al iniciar el servicio:", error);
+    console.error("Error fatal al iniciar el servicio:", error);
     process.exit(1);
   }
 })();
