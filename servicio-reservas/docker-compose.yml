@@ -1,39 +1,77 @@
-
 services:
   app:
     build: .
     container_name: servicio-reservas
     ports:
-      - "3001:3001"
-    env_file:
-      - .env
+      - "3002:3002"
+    environment:
+      # Sobrescribir variables del .env para Docker
+      DB_HOST: mysql
+      DB_PORT: 3306
+      DB_USER: usuario
+      DB_PASSWORD: password123
+      DB_NAME: db_smartride_reservas
+      RABBITMQ_URL: amqp://guest:guest@rabbitmq
+      RABBITMQ_EXCHANGE: smart_ride_exchange
+      PORT: 3002
     depends_on:
-      - mysql
-      - rabbitmq
+      mysql:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    networks:
+      - smartride-network
+    restart: unless-stopped
 
   mysql:
-    image: mysql:8.0
+    image: mysql:latest
     container_name: rideservice-mysql
     restart: always
     environment:
-      MYSQL_ROOT_PASSWORD: root_password
-      MYSQL_DATABASE: rideservice_db
-      MYSQL_USER: user
-      MYSQL_PASSWORD: password
+      MYSQL_ROOT_PASSWORD: password123
+      MYSQL_DATABASE: db_smartride_reservas
+      MYSQL_USER: usuario
+      MYSQL_PASSWORD: password123
     ports:
-      - "3307:3306"
+      - "3306:3306"
     volumes:
       - mysql_data:/var/lib/mysql
+    networks:
+      - smartride-network
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "usuario", "-password123"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
 
   rabbitmq:
     image: rabbitmq:3-management
     container_name: rideservice-rabbitmq
+    restart: always
     ports:
       - "5672:5672"
-      - "15672:15672" # panel web
+      - "15672:15672"
     environment:
       RABBITMQ_DEFAULT_USER: guest
       RABBITMQ_DEFAULT_PASS: guest
-      
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+    networks:
+      - smartride-network
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
 volumes:
   mysql_data:
+    driver: local
+  rabbitmq_data:
+    driver: local
+
+networks:
+  smartride-network:
+    driver: bridge

@@ -12,8 +12,12 @@ const options = {
     },
     servers: [
       {
-        url: "http://localhost:3001",
+        url: "http://localhost:3002", 
         description: "Servidor local de desarrollo",
+      },
+      {
+        url: "http://localhost/rides", 
+        description: "API Gateway (Nginx)",
       },
     ],
   },
@@ -24,7 +28,9 @@ const swaggerSpec = swaggerJsDoc(options);
 
 function setupSwagger(app) {
   app.use("/api-docs", swaggerUi.serve, swaggerUi.setup(swaggerSpec));
-  console.log("📘 Swagger disponible en http://localhost:3001/api-docs");
+  console.log("Swagger disponible en:");
+  console.log("   - Directo: http://localhost:3002/api-docs");
+  console.log("   - Nginx:   http://localhost/api-docs");
 }
 
 module.exports = { setupSwagger };

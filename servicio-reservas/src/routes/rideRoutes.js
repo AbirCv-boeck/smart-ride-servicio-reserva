@@ -1,12 +1,25 @@
 const express = require("express");
 const router = express.Router();
-const {
-  createRide,
-  getAllRides,
-  getRide,
-  updateRide,
-  deleteRide,
-} = require("../controllers/rideController");
+const rideController = require("../controllers/rideController");
+
+/**
+ * @swagger
+ * /rides/health:
+ *   get:
+ *     summary: Health check endpoint
+ *     description: Verifica que el servicio esté funcionando correctamente
+ *     responses:
+ *       200:
+ *         description: Servicio saludable
+ */
+router.get("/health", (req, res) => {
+  res.status(200).json({
+    status: "healthy",
+    service: "reservas",
+    timestamp: new Date().toISOString(),
+    uptime: process.uptime()
+  });
+});
 
 /**
  * @swagger
@@ -69,7 +82,7 @@ const {
  *             schema:
  *               $ref: '#/components/schemas/Viaje'
  */
-router.post("/", createRide);
+router.post("/", rideController.createRide);
 
 /**
  * @swagger
@@ -87,7 +100,7 @@ router.post("/", createRide);
  *               items:
  *                 $ref: '#/components/schemas/Viaje'
  */
-router.get("/", getAllRides);
+router.get("/", rideController.getAllRides);
 
 /**
  * @swagger
@@ -111,7 +124,7 @@ router.get("/", getAllRides);
  *       404:
  *         description: Viaje no encontrado
  */
-router.get("/:id", getRide);
+router.get("/:id", rideController.getRide);
 
 /**
  * @swagger
@@ -165,7 +178,7 @@ router.get("/:id", getRide);
  *       404:
  *         description: Viaje no encontrado
  */
-router.patch("/:id", updateRide);
+router.patch("/:id", rideController.updateRide);
 
 /**
  * @swagger
@@ -185,6 +198,6 @@ router.patch("/:id", updateRide);
  *       404:
  *         description: Viaje no encontrado
  */
-router.delete("/:id", deleteRide);
+router.delete("/:id", rideController.deleteRide);
 
 module.exports = router;
