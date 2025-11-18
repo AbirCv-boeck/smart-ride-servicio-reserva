@@ -32,30 +32,48 @@ El **Servicio de Reservas** es responsable de:
 
 ## 🏗️ Arquitectura y Estructura de Carpetas
 
-```
-servicio-reservas/
+smart-ride-servicio-reserva/
 ├─ src/
-│  ├─ config/
-│  │  ├─ db.js
-│  │  └─ rabbitmq.js
-│  ├─ controllers/
-│  │  └─ rideController.js
-│  ├─ entities/
-│  │  ├─ viaje.js
-│  │  ├─ reservaHistorial.js
-│  │  └─ preferenciaViaje.js
-│  ├─ routes/
-│  │  └─ rideRoutes.js
-│  ├─ service/
-│  │  └─ rideService.js
-│  ├─ swagger/
-│  │  └─ swagger.js
-│  └─ index.js
-├─ .env
-├─ .gitignore
-├─ Dockerfile
-└─ docker-compose.yml
-```
+│ ├─ config/                    # Configuración de servicios externos
+│ │ ├─ db.js                    # Conexión y configuración de MySQL
+│ │ 
+│ ├─ controllers/               # Controladores que reciben solicitudes HTTP
+│ │ ├─ rideController.js         # Lógica de endpoints de viajes
+│ │ ├─ preferenceController.js   # Lógica de preferencias de viaje
+│ │ └─ stateController.js        # Lógica de estados de viaje
+│ ├─ entities/                  # Modelos de datos para TypeORM
+│ │ ├─ viaje.js                   # Modelo de viaje
+│ │ ├─ reservaHistorial.js        # Modelo de historial de reservas
+│ │ └─ preferenciaViaje.js        # Modelo de preferencias del pasajero
+│ ├─ events/                     # Publicadores, consumidores y tipos de eventos
+│ │ ├─ eventTypes.js
+│ │ ├─ publisher.js
+│ │ ├─ queue.js
+│ │ └─ worker.js
+│ ├─ middlewares/                # Middlewares de autenticación, validación y manejo de errores
+│ │ ├─ auth.js
+│ │ ├─ errorHandler.js
+│ │ ├─ roles.js
+│ │ └─ validateRequest.js
+│ ├─ routes/                    # Definición de rutas REST
+│ │ ├─ rideRoutes.js              # Endpoints para operaciones de viaje
+│ │ ├─ preferenceRoutes.js        # Endpoints de preferencias
+│ │ └─ stateRoutes.js             # Endpoints de estados de viaje
+│ ├─ services/                   # Lógica de negocio
+│ │ ├─ rideService.js             # Funciones de creación, actualización y estado de viajes
+│ │ ├─ preferenceService.js       # Gestión de preferencias de viajes
+│ │ ├─ stateService.js            # Gestión de estados de viaje
+│ │ └─ eventService.js            # Publicación y consumo de eventos
+│ ├─ validations/                 # Validaciones de entrada de datos
+│ │ ├─ rideValidation.js
+│ │ └─ stateValidation.js
+│ ├─ swagger/                     # Documentación de API
+│ │ └─ swagger.js                 # Configuración de Swagger
+│ └─ index.js                     # Punto de entrada del microservicio
+├─ .env                         # Variables de entorno
+├─ .gitignore                   # Archivos y carpetas a ignorar por Git
+├─ Dockerfile                   # Imagen Docker del servicio
+└─ docker-compose.yml           # Orquestación de contenedores
 
 > Cada carpeta tiene funciones específicas:
 >
@@ -63,7 +81,9 @@ servicio-reservas/
 > * **controllers:** Recibe las solicitudes HTTP.
 > * **entities:** Modelos de datos para TypeORM.
 > * **routes:** Define endpoints REST.
-> * **service:** Lógica de negocio.
+> * **services:** Lógica de negocio.
+> * **events:** Publicación y consumo de eventos RabbitMQ.
+> * **middlewares:** Autenticación, validación y manejo de errores.
 > * **swagger:** Documentación de API.
 > * **index.js:** Punto de entrada del microservicio.
 

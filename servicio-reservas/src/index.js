@@ -1,28 +1,28 @@
+
 require("dotenv").config();
 require("reflect-metadata");
+require("./src/events/worker");
+
 const express = require("express");
 const { AppDataSource } = require("./config/db");
-const { connectRabbitMQ, isRabbitConnected } = require("./config/rabbitmq");
+const { initEventPublisher } = require('./services/eventService');
+
 const rideRoutes = require("./routes/rideRoutes");
+const stateRoutes = require('./routes/stateRoutes');
+const preferenceRoutes = require("./routes/preferenceRoutes");
 const { setupSwagger } = require("./swagger/swagger");
+const errorHandler = require('./middlewares/errorHandler');
 
 const app = express();
 app.use(express.json());
 
-// Swagger
+
 setupSwagger(app);
 
 const PORT = process.env.PORT || 3002;
 const SWAGGER_URL = `http://localhost:${PORT}/api-docs`;
 
-// Rutas
-app.use("/rides", rideRoutes);
-
-app.use("/", (req, res) => {
-  res.send("Servicio de Reservas y Viajes (Ride Service) está funcionando");
-});
-
-// Health check endpoint - DEBE IR ANTES de otras rutas
+/*
 app.get('/health', (req, res) => {
   res.status(200).json({ 
     status: 'healthy',
@@ -31,8 +31,21 @@ app.get('/health', (req, res) => {
     uptime: process.uptime()
   });
 });
+*/
 
-// Función para reintentar conexión a MySQL
+// Rutas
+app.use("/rides", rideRoutes);
+app.use('/rides/state', stateRoutes);
+app.use("/rides/preferences", preferenceRoutes);
+
+app.use(errorHandler);
+
+app.use("/", (req, res) => {
+  res.send("Servicio de Reservas y Viajes (Ride Service) está funcionando");
+});
+
+
+
 async function connectWithRetry(maxRetries = 10, delay = 5000) {
   for (let attempt = 1; attempt <= maxRetries; attempt++) {
     try {
@@ -54,26 +67,26 @@ async function connectWithRetry(maxRetries = 10, delay = 5000) {
   }
 }
 
-// Inicializar servicios
+
 (async () => {
   try {
-    // Conectar a MySQL con reintentos
     await connectWithRetry();
+    console.log("🔄 Inicializando Event Publisher...");
+    const pubReady = await initEventPublisher();
 
-    // Conectar a RabbitMQ con reintentos
-    const rabbitConnected = await connectRabbitMQ();
-    if (rabbitConnected && isRabbitConnected()) {
-      console.log("RabbitMQ listo para publicar eventos");
+    if (!pubReady) {
+      console.warn("⚠️ Event Publisher NO está disponible, los eventos NO se enviarán.");
     } else {
-      console.warn("RabbitMQ NO está disponible, los eventos no se enviarán");
+      console.log("📨 Event Publisher listo para enviar eventos.");
     }
 
-    // Levantar servidor
+
     app.listen(PORT, () => {
       console.log(`Ride Service corriendo en puerto ${PORT}`);
       console.log(`Documentación Swagger: \x1b[36m${SWAGGER_URL}\x1b[0m`);
       console.log(`Servicio listo para recibir solicitudes`);
     });
+
   } catch (error) {
     console.error("Error fatal al iniciar el servicio:", error);
     process.exit(1);

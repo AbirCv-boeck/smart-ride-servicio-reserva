@@ -13,6 +13,7 @@ services:
       DB_NAME: db_smartride_reservas
       RABBITMQ_URL: amqp://guest:guest@rabbitmq
       RABBITMQ_EXCHANGE: smart_ride_exchange
+      JWT_SECRET: 3583fbebc94b3a65b11d63e791f49e7de5e4b8bde1bb8548e707f1a78f321c6118f3aa0edf7d1c1429bb199979241ad30a8447acc27c085a89148647b254f402 
       PORT: 3002
     depends_on:
       mysql:

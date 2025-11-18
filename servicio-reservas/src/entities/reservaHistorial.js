@@ -9,18 +9,24 @@ const ReservaHistorial = new EntitySchema({
       type: "int",
       generated: true
     },
-    id_viaje: {
-      type: "int"
-    },
     accion: {
       type: "varchar"
     },
     detalle: {
-      type: "varchar"
+      type: "varchar",
+      nullable: true
     },
     fecha_accion: {
       type: "datetime",
       default: () => "CURRENT_TIMESTAMP"
+    }
+  },
+  relations: {
+    viaje: {
+      type: "many-to-one",
+      target: "Viaje",
+      joinColumn: { name: "id_viaje" },
+      nullable: false
     }
   }
 });

@@ -1,103 +1,67 @@
-const { RideService } = require("../services/rideService");
-const { publishEvent, isRabbitConnected } = require("../config/rabbitmq");
 
+const rideService = require("../services/rideService");
 
-async function createRide(req, res) {
+async function createRide(req, res, next) {
   try {
-    const ride = await RideService.createRide(req.body);
+    const payload = req.body;
+    const id_usuario = req.user.id_usuario;
 
-    // Publicar evento de reserva creada
-    if (isRabbitConnected()) {
-      publishEvent("reserva_creada", {
-        rideId: ride.id,
-        cliente: ride.id_cliente,
-        origen: ride.punto_origen,
-        destino: ride.punto_destino,
-        estado: ride.estado,
-        fecha: ride.fecha_solicitud
-      });
-    }
-
-    res.status(201).json(ride);
+    const created = await rideService.createRide(payload, id_usuario);
+    return res.status(201).json(created);
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    next(err);
   }
 }
 
-async function getAllRides(req, res) {
+async function getAllRides(req, res, next) {
   try {
-    const rides = await RideService.getAllRides();
-    res.json(rides);
+    const user = req.user;
+    const rides = await rideService.getAllRides(user);
+    return res.json(rides);
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    next(err);
   }
 }
 
-async function getRide(req, res) {
+async function getRide(req, res, next) {
   try {
-    const ride = await RideService.getRideById(req.params.id);
+    const id = parseInt(req.params.id, 10);
+    const user = req.user;
+    const ride = await rideService.getRideById(id, user);
     if (!ride) return res.status(404).json({ error: "Viaje no encontrado" });
-    res.json(ride);
+    return res.json(ride);
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    next(err);
   }
 }
 
-async function updateRide(req, res) {
+async function updateRide(req, res, next) {
   try {
-    const { id } = req.params;
-    const dataToUpdate = req.body;
-
-    // 🔹 Obtener el viaje existente
-    const existingRide = await RideService.getRideById(id);
-    if (!existingRide) {
-      return res.status(404).json({ error: "Viaje no encontrado" });
-    }
-
-    // 🔹 Actualizar solo los campos enviados (actualización parcial)
-    Object.assign(existingRide, dataToUpdate);
-
-    // 🔹 Guardar cambios en la BD
-    const ride = await RideService.updateRide(id, existingRide);
-
-    // 🔹 Publicar evento de viaje actualizado
-    if (ride && isRabbitConnected()) {
-      publishEvent("viaje_actualizado", {
-        rideId: ride.id,
-        estado: ride.estado,
-        cliente: ride.id_cliente,
-        origen: ride.punto_origen,
-        destino: ride.punto_destino
-      });
-    }
-
-    res.json({
-      message: "✅ Viaje actualizado parcialmente",
-      data: ride
-    });
+    const id = parseInt(req.params.id, 10);
+    const updates = req.body;
+    const user = req.user;
+    const updated = await rideService.updateRide(id, updates, user);
+    return res.json(updated);
   } catch (err) {
-    console.error("❌ Error actualizando viaje:", err);
-    res.status(500).json({ error: err.message });
+    next(err);
   }
 }
 
-
-async function deleteRide(req, res) {
+async function deleteRide(req, res, next) {
   try {
-    const ride = await RideService.deleteRide(req.params.id);
-    if (!ride) return res.status(404).json({ error: "Viaje no encontrado" });
-
-    // Publicar evento de viaje eliminado
-    if (isRabbitConnected()) {
-      publishEvent("viaje_eliminado", {
-        rideId: req.params.id
-      });
-    }
-
-    res.json({ message: "Viaje eliminado" });
+    const id = parseInt(req.params.id, 10);
+    const user = req.user;
+    await rideService.deleteRide(id, user);
+    return res.json({ ok: true, message: "Viaje eliminado" });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    next(err);
   }
 }
 
-module.exports = { createRide, getAllRides, getRide, updateRide, deleteRide };
+module.exports = {
+  createRide,
+  getAllRides,
+  getRide,
+  updateRide,
+  deleteRide
+};

@@ -11,21 +11,22 @@ const Viaje = new EntitySchema({
     },
     id_cliente: {
       type: "int",
-      nullable: true
+      nullable: false
     },
     id_conductor: {
       type: "int",
       nullable: true
     },
-    punto_origen: {
-      type: "varchar"
+    origen: {
+      type: "varchar",
     },
-    punto_destino: {
-      type: "varchar"
+    destino: {
+      type: "varchar",
     },
     estado: {
-      type: "varchar",
-      default: "pendiente"
+      type: "enum",
+      enum: ["PENDIENTE", "ASIGNADO", "EN_PROGRESO", "COMPLETADO", "CANCELADO"],
+      default: "PENDIENTE"
     },
     fecha_solicitud: {
       type: "datetime",
@@ -38,6 +39,13 @@ const Viaje = new EntitySchema({
     fecha_fin: {
       type: "datetime",
       nullable: true
+    }
+  },
+  relations: {
+    historial: {
+      type: "one-to-many",
+      target: "ReservaHistorial",
+      inverseSide: "viaje",
     }
   }
 });

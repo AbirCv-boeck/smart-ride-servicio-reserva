@@ -2,24 +2,11 @@ const express = require("express");
 const router = express.Router();
 const rideController = require("../controllers/rideController");
 
-/**
- * @swagger
- * /rides/health:
- *   get:
- *     summary: Health check endpoint
- *     description: Verifica que el servicio esté funcionando correctamente
- *     responses:
- *       200:
- *         description: Servicio saludable
- */
-router.get("/health", (req, res) => {
-  res.status(200).json({
-    status: "healthy",
-    service: "reservas",
-    timestamp: new Date().toISOString(),
-    uptime: process.uptime()
-  });
-});
+const auth = require('../middlewares/auth');
+const role = require('../middlewares/roles');
+const { createRideRules } = require("../validations/rideValidation");
+const validateRequest = require("../middlewares/validateRequest");
+
 
 /**
  * @swagger
@@ -55,9 +42,30 @@ router.get("/health", (req, res) => {
  *           format: date-time
  */
 
+
 /**
  * @swagger
- * /rides/create:
+ * /rides/health:
+ *   get:
+ *     summary: Health check endpoint
+ *     description: Verifica que el servicio esté funcionando correctamente
+ *     responses:
+ *       200:
+ *         description: Servicio saludable
+ */
+router.get("/health", (req, res) => {
+  res.status(200).json({
+    status: "healthy",
+    service: "reservas",
+    timestamp: new Date().toISOString(),
+    uptime: process.uptime()
+  });
+});
+
+
+/**
+ * @swagger
+ * /rides/:
  *   post:
  *     summary: Crear una nueva reserva de viaje
  *     tags: [Viajes]
@@ -82,7 +90,7 @@ router.get("/health", (req, res) => {
  *             schema:
  *               $ref: '#/components/schemas/Viaje'
  */
-router.post("/", rideController.createRide);
+router.post("/",auth,role(['PASAJERO']) ,createRideRules,validateRequest, rideController.createRide);
 
 /**
  * @swagger
@@ -100,7 +108,7 @@ router.post("/", rideController.createRide);
  *               items:
  *                 $ref: '#/components/schemas/Viaje'
  */
-router.get("/", rideController.getAllRides);
+router.get("/",auth,role(['ADMIN','CONDUCTOR','PASAJERO']), rideController.getAllRides);
 
 /**
  * @swagger
@@ -124,7 +132,7 @@ router.get("/", rideController.getAllRides);
  *       404:
  *         description: Viaje no encontrado
  */
-router.get("/:id", rideController.getRide);
+router.get("/:id",auth,role(['ADMIN','PASAJERO','CONDUCTOR']), rideController.getRide);
 
 /**
  * @swagger
@@ -178,7 +186,7 @@ router.get("/:id", rideController.getRide);
  *       404:
  *         description: Viaje no encontrado
  */
-router.patch("/:id", rideController.updateRide);
+router.patch("/:id",auth,role(['ADMIN','CONDUCTOR']), rideController.updateRide);
 
 /**
  * @swagger
@@ -198,6 +206,6 @@ router.patch("/:id", rideController.updateRide);
  *       404:
  *         description: Viaje no encontrado
  */
-router.delete("/:id", rideController.deleteRide);
+router.delete("/:id",auth,role(['ADMIN']), rideController.deleteRide);
 
 module.exports = router;
