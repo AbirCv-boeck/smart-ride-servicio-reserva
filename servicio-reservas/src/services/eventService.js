@@ -2,23 +2,23 @@
 const publisher = require("../events/publisher");
 const EventTypes = require("../events/eventTypes");
 
-// Inicializa publisher al levantar el servicio
 async function initEventPublisher() {
-  const ok = await publisher.connect();
+  const ok = await publisher.initializeRabbitMQ();
   if (!ok) {
     console.warn("⚠️ No se pudo inicializar el Event Publisher");
   }
   return ok;
 }
 
-// Wrapper para publicar eventos desde cualquier módulo
 async function publishEvent(eventType, payload = {}) {
-  if (!publisher.isConnected()) {
-    console.warn("⚠️ Publisher no conectado. Evento NO enviado:", eventType);
+  const channel = publisher.getChannel();
+
+  if (!channel) {
+    console.warn("⚠️ Canal RabbitMQ no disponible. Evento NO enviado:", eventType);
     return false;
   }
 
-  return publisher.publish(eventType, payload);
+  return publisher.publishEvent(eventType, payload);
 }
 
 module.exports = {

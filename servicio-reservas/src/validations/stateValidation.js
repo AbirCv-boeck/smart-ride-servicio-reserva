@@ -1,10 +1,9 @@
-// src/validations/stateValidation.js
 const { param, body } = require("express-validator");
 
 const idParamRule = [
   param("id")
     .exists().withMessage("id es requerido")
-    .isInt().withMessage("id debe ser un entero")
+    .isInt({ min: 1 }).withMessage("id debe ser un entero positivo")
 ];
 
 const cancelRules = [
@@ -12,7 +11,8 @@ const cancelRules = [
   body("motivo")
     .optional()
     .isString().withMessage("motivo debe ser texto")
-    .isLength({ max: 255 }).withMessage("motivo muy largo")
+    .trim()
+    .isLength({ max: 500 }).withMessage("motivo muy largo (máximo 500 caracteres)")
 ];
 
 module.exports = { idParamRule, cancelRules };

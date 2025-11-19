@@ -4,39 +4,60 @@ const router = express.Router();
 const stateController = require('../controllers/stateController');
 const auth = require('../middlewares/auth');
 const role = require('../middlewares/roles');
-
+const { idParamRule, cancelRules } = require('../validations/stateValidation');
+const validateRequest = require('../middlewares/validateRequest');
 
 /**
  * @swagger
  * /rides/state/{id}/accept:
  *   patch:
- *     summary: Aceptar un viaje (conductor)
- *     tags: [Viajes - Estados]
+ *     summary: Aceptar un viaje (Conductor)
+ *     description: El conductor acepta un viaje pendiente
+ *     tags: [Estados de Viaje]
+ *     security:
+ *       - bearerAuth: []
  *     parameters:
  *       - in: path
  *         name: id
+ *         required: true
  *         schema:
  *           type: integer
- *         required: true
- *         description: ID del viaje a aceptar
- *     security:
- *       - bearerAuth: []
+ *         description: ID del viaje
  *     responses:
  *       200:
  *         description: Viaje asignado exitosamente
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: true
+ *                 data:
+ *                   $ref: '#/components/schemas/Viaje'
  *       401:
- *         description: No autorizado
+ *         description: No autenticado
+ *       403:
+ *         description: Sin permisos (no es conductor)
  *       409:
  *         description: Conflicto de estado
  */
-
-router.patch('/:id/accept', auth, role(['CONDUCTOR']), stateController.acceptRide);
+router.patch(
+  '/:id/accept',
+  auth,
+  role(['CONDUCTOR']),
+  idParamRule,
+  validateRequest,
+  stateController.acceptRide
+);
 
 /**
  * @swagger
  * /rides/state/{id}/start:
  *   patch:
- *     summary: Iniciar un viaje aceptado
+ *     summary: Iniciar un viaje (Conductor)
+ *     description: El conductor inicia un viaje asignado
  *     tags: [Estados de Viaje]
  *     security:
  *       - bearerAuth: []
@@ -49,18 +70,28 @@ router.patch('/:id/accept', auth, role(['CONDUCTOR']), stateController.acceptRid
  *     responses:
  *       200:
  *         description: Viaje iniciado
- *       400:
- *         description: El viaje no está en estado asignado
+ *       401:
+ *         description: No autenticado
+ *       403:
+ *         description: No es el conductor asignado
+ *       409:
+ *         description: El viaje no está en estado ASIGNADO
  */
-
-
-router.patch('/:id/start', auth, role(['CONDUCTOR']), stateController.startRide);
+router.patch(
+  '/:id/start',
+  auth,
+  role(['CONDUCTOR']),
+  idParamRule,
+  validateRequest,
+  stateController.startRide
+);
 
 /**
  * @swagger
  * /rides/state/{id}/finish:
  *   patch:
- *     summary: Finalizar un viaje en progreso
+ *     summary: Finalizar un viaje (Conductor)
+ *     description: El conductor marca el viaje como completado
  *     tags: [Estados de Viaje]
  *     security:
  *       - bearerAuth: []
@@ -73,17 +104,28 @@ router.patch('/:id/start', auth, role(['CONDUCTOR']), stateController.startRide)
  *     responses:
  *       200:
  *         description: Viaje finalizado correctamente
+ *       401:
+ *         description: No autenticado
+ *       403:
+ *         description: No es el conductor asignado
+ *       409:
+ *         description: El viaje no está EN_PROGRESO
  */
-
-
-
-router.patch('/:id/finish', auth, role(['CONDUCTOR']), stateController.finishRide);
+router.patch(
+  '/:id/finish',
+  auth,
+  role(['CONDUCTOR']),
+  idParamRule,
+  validateRequest,
+  stateController.finishRide
+);
 
 /**
  * @swagger
  * /rides/state/{id}/cancel:
  *   patch:
- *     summary: Cancelar un viaje (solo pasajero)
+ *     summary: Cancelar un viaje (Pasajero/Conductor)
+ *     description: Cancela un viaje que aún no ha iniciado
  *     tags: [Estados de Viaje]
  *     security:
  *       - bearerAuth: []
@@ -94,7 +136,6 @@ router.patch('/:id/finish', auth, role(['CONDUCTOR']), stateController.finishRid
  *         schema:
  *           type: integer
  *     requestBody:
- *       required: false
  *       content:
  *         application/json:
  *           schema:
@@ -102,22 +143,33 @@ router.patch('/:id/finish', auth, role(['CONDUCTOR']), stateController.finishRid
  *             properties:
  *               motivo:
  *                 type: string
- *           example:
- *             motivo: "Cambio de planes"
+ *                 maxLength: 500
+ *                 example: "Cambio de planes"
  *     responses:
  *       200:
  *         description: Viaje cancelado exitosamente
+ *       401:
+ *         description: No autenticado
+ *       403:
+ *         description: Solo el pasajero puede cancelar
+ *       409:
+ *         description: No se puede cancelar en este estado
  */
-
-
-
-router.patch('/:id/cancel', auth, role(['PASAJERO','CONDUCTOR']), stateController.cancelRide);
+router.patch(
+  '/:id/cancel',
+  auth,
+  role(['PASAJERO', 'CONDUCTOR']),
+  cancelRules,
+  validateRequest,
+  stateController.cancelRide
+);
 
 /**
  * @swagger
  * /rides/state/{id}/history:
  *   get:
- *     summary: Ver historial de cambios de estado para un viaje
+ *     summary: Ver historial de un viaje
+ *     description: Obtiene el historial completo de cambios de estado
  *     tags: [Estados de Viaje]
  *     security:
  *       - bearerAuth: []
@@ -130,10 +182,43 @@ router.patch('/:id/cancel', auth, role(['PASAJERO','CONDUCTOR']), stateControlle
  *     responses:
  *       200:
  *         description: Historial obtenido
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: true
+ *                 data:
+ *                   type: array
+ *                   items:
+ *                     type: object
+ *                     properties:
+ *                       id_historial:
+ *                         type: integer
+ *                       accion:
+ *                         type: string
+ *                       detalle:
+ *                         type: string
+ *                       actor_id:
+ *                         type: integer
+ *                       actor_rol:
+ *                         type: string
+ *                       fecha_accion:
+ *                         type: string
+ *                         format: date-time
+ *       401:
+ *         description: No autenticado
  */
-
-
-router.get('/:id/history', auth, role(['ADMIN','PASAJERO','CONDUCTOR']), stateController.getHistory);
+router.get(
+  '/:id/history',
+  auth,
+  role(['ADMIN', 'PASAJERO', 'CONDUCTOR']),
+  idParamRule,
+  validateRequest,
+  stateController.getHistory
+);
 
 module.exports = router;
 

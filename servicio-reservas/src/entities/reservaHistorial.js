@@ -4,20 +4,31 @@ const ReservaHistorial = new EntitySchema({
   name: "ReservaHistorial",
   tableName: "reserva_historial",
   columns: {
-    id: {
+    id_historial: {
       primary: true,
       type: "int",
       generated: true
     },
     accion: {
-      type: "varchar"
+      type: "varchar",
+      length: 50,
+      nullable: false
     },
     detalle: {
-      type: "varchar",
+      type: "text",
+      nullable: true
+    },
+    actor_id: {
+      type: "int",
+      nullable: true
+    },
+    actor_rol: {
+      type: "enum",
+      enum: ["PASAJERO", "CONDUCTOR", "ADMIN", "SISTEMA"],
       nullable: true
     },
     fecha_accion: {
-      type: "datetime",
+      type: "timestamp",
       default: () => "CURRENT_TIMESTAMP"
     }
   },
@@ -26,7 +37,8 @@ const ReservaHistorial = new EntitySchema({
       type: "many-to-one",
       target: "Viaje",
       joinColumn: { name: "id_viaje" },
-      nullable: false
+      nullable: false,
+      onDelete: "CASCADE"
     }
   }
 });

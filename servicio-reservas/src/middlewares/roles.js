@@ -1,7 +1,7 @@
-
 /**
- * roleMiddleware(allowedRoles)
- * allowedRoles: array de strings, p.ej. ['PASAJERO', 'ADMIN']
+ * Middleware de verificación de roles
+ * @param {string[]} allowedRoles - Array de roles permitidos
+ * @returns {Function} Middleware function
  */
 function roleMiddleware(allowedRoles = []) {
   if (!Array.isArray(allowedRoles)) {
@@ -11,20 +11,37 @@ function roleMiddleware(allowedRoles = []) {
   return function (req, res, next) {
     try {
       if (!req.user) {
-        return res.status(401).json({ error: "Usuario no autenticado" });
+        return res.status(401).json({ 
+          success: false,
+          error: "Usuario no autenticado" 
+        });
       }
 
       const userRole = String(req.user.rol).toUpperCase();
       const normalizedAllowed = allowedRoles.map(r => String(r).toUpperCase());
 
+      // ADMIN siempre tiene acceso
+      if (userRole === "ADMIN") {
+        return next();
+      }
+
       if (!normalizedAllowed.includes(userRole)) {
-        return res.status(403).json({ error: "Permisos insuficientes" });
+        console.warn(`⚠️ Acceso denegado: Usuario ${req.user.email} (${userRole}) intentó acceder a recurso que requiere: ${normalizedAllowed.join(", ")}`);
+        return res.status(403).json({ 
+          success: false,
+          error: "Permisos insuficientes",
+          required_roles: normalizedAllowed,
+          user_role: userRole
+        });
       }
 
       return next();
     } catch (err) {
-      console.error("roleMiddleware error:", err);
-      return res.status(500).json({ error: "Error en middleware de roles" });
+      console.error("❌ Error en roleMiddleware:", err);
+      return res.status(500).json({ 
+        success: false,
+        error: "Error en middleware de roles" 
+      });
     }
   };
 }

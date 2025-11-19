@@ -19,9 +19,13 @@ const Viaje = new EntitySchema({
     },
     origen: {
       type: "varchar",
+      length: 500,
+      nullable: false
     },
     destino: {
       type: "varchar",
+      length: 500,
+      nullable: false
     },
     estado: {
       type: "enum",
@@ -29,23 +33,40 @@ const Viaje = new EntitySchema({
       default: "PENDIENTE"
     },
     fecha_solicitud: {
-      type: "datetime",
+      type: "timestamp",
       default: () => "CURRENT_TIMESTAMP"
     },
+    fecha_asignacion: {
+      type: "timestamp",
+      nullable: true
+    },
     fecha_inicio: {
-      type: "datetime",
+      type: "timestamp",
       nullable: true
     },
     fecha_fin: {
-      type: "datetime",
+      type: "timestamp",
       nullable: true
+    },
+    motivo_cancelacion: {
+      type: "text",
+      nullable: true
+    },
+    created_at: {
+      type: "timestamp",
+      default: () => "CURRENT_TIMESTAMP"
+    },
+    updated_at: {
+      type: "timestamp",
+      default: () => "CURRENT_TIMESTAMP",
+      onUpdate: "CURRENT_TIMESTAMP"
     }
   },
   relations: {
     historial: {
       type: "one-to-many",
       target: "ReservaHistorial",
-      inverseSide: "viaje",
+      inverseSide: "viaje"
     }
   }
 });

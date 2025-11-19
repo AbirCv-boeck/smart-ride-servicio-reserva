@@ -1,80 +1,116 @@
-const amqp = require("amqplib");
-const { EXCHANGE, QUEUES } = require("./queues");
-const EventTypes = require("./eventTypes");
+const amqp = require('amqplib');
 
-let connection = null;
 let channel = null;
+let connection = null;
 
-async function connect(retries = 15, retryDelay = 3000) {
-  for (let attempt = 1; attempt <= retries; attempt++) {
-    try {
-      connection = await amqp.connect(process.env.RABBITMQ_URL || "amqp://guest:guest@localhost:5672");
-      channel = await connection.createChannel();
+const RABBITMQ_URL = process.env.RABBITMQ_URL;
+const EXCHANGE_NAME = process.env.RABBITMQ_EXCHANGE;
+const EXCHANGE_TYPE = 'topic';
 
-      // Exchange general del ecosistema
-      await channel.assertExchange(EXCHANGE, "topic", { durable: true });
+/**
+ * Inicializar conexión con RabbitMQ
+ */
+async function initializeRabbitMQ() {
+  try {
+    console.log(`🐰 Conectando a RabbitMQ: ${RABBITMQ_URL}`);
+    
+    connection = await amqp.connect(RABBITMQ_URL, {
+      heartbeat: 60,
+      timeout: 30000
+    });
 
-      /**
-       * Por ahora el Ride Service creará solo sus colas base,
-       * pero NO consumirá nada.
-       *
-       * Los otros microservicios NO deben crear sus exchanges,
-       * solo usar este y sus routing keys.
-       */
-      await channel.assertQueue(QUEUES.DISPATCH_NEW_RESERVAS, { durable: true });
-      await channel.assertQueue(QUEUES.PAYMENT_VIAJES, { durable: true });
-      await channel.assertQueue(QUEUES.NOTIFICATION_ALL, { durable: true });
+    connection.on('error', (err) => {
+      console.error('❌ Error en conexión RabbitMQ:', err);
+    });
 
-      /**
-       * Enlaces de routing:
-       * Estas reglas definen qué eventos van a cada microservicio.
-       * NO TOCAR. Los demás microservicios dependerán de esto.
-       */
-      await channel.bindQueue(QUEUES.DISPATCH_NEW_RESERVAS, EXCHANGE, "ride.nueva_reserva");
-      await channel.bindQueue(QUEUES.PAYMENT_VIAJES, EXCHANGE, "ride.viaje_completado");
+    connection.on('close', () => {
+      console.warn('⚠️ Conexión RabbitMQ cerrada. Reintentando...');
+      setTimeout(initializeRabbitMQ, 5000);
+    });
 
-      // Notificaciones recibirá TODO
-      await channel.bindQueue(QUEUES.NOTIFICATION_ALL, EXCHANGE, "ride.*");
+    channel = await connection.createChannel();
+    
+    // Declarar exchange tipo 'topic' para routing flexible
+    await channel.assertExchange(EXCHANGE_NAME, EXCHANGE_TYPE, {
+      durable: true,
+      autoDelete: false
+    });
 
-      console.log("🐇 Publisher conectado a RabbitMQ (topic exchange).");
-      return true;
-
-    } catch (err) {
-      console.error(`RabbitMQ connect attempt ${attempt} failed:`, err.message);
-      if (attempt < retries) {
-        await new Promise(r => setTimeout(r, retryDelay));
-      } else {
-        return false;
-      }
-    }
+    console.log(`✅ RabbitMQ inicializado - Exchange: ${EXCHANGE_NAME} (${EXCHANGE_TYPE})`);
+    
+    return { connection, channel };
+  } catch (error) {
+    console.error('❌ Error al inicializar RabbitMQ:', error.message);
+    console.log('🔄 Reintentando conexión en 5 segundos...');
+    setTimeout(initializeRabbitMQ, 5000);
+    throw error;
   }
 }
 
-function isConnected() {
-  return !!channel;
-}
-
-function publish(eventType, payload = {}) {
+/**
+ * Publicar evento a RabbitMQ
+ * @param {string} routingKey - Clave de routing (ej: 'ride.nueva_reserva')
+ * @param {object} message - Mensaje a publicar
+ */
+async function publishEvent(routingKey, message) {
   if (!channel) {
-    console.error("❌ RabbitMQ no disponible. Evento no enviado:", eventType);
-    return false;
+    console.warn('⚠️ Canal RabbitMQ no disponible. Inicializando...');
+    await initializeRabbitMQ();
   }
-
-  const body = Buffer.from(JSON.stringify({
-    event: eventType,
-    data: payload,
-    timestamp: new Date().toISOString(),
-  }));
 
   try {
-    channel.publish(EXCHANGE, eventType, body, { persistent: true });
-    console.log(`📨 Evento publicado: ${eventType}`);
-    return true;
+    const messageBuffer = Buffer.from(JSON.stringify(message));
+    
+    const published = channel.publish(
+      EXCHANGE_NAME,
+      routingKey,
+      messageBuffer,
+      {
+        persistent: true,
+        contentType: 'application/json',
+        timestamp: Date.now(),
+        appId: 'reservas-service'
+      }
+    );
 
-  } catch (err) {
-    console.error("Error publicando evento:", err);
-    return false;
+    if (published) {
+      console.log(`📤 Evento publicado: ${routingKey}`, {
+        exchange: EXCHANGE_NAME,
+        messageId: message.id_viaje || 'N/A'
+      });
+    } else {
+      console.warn('⚠️ Buffer lleno. Evento en cola:', routingKey);
+    }
+
+    return published;
+  } catch (error) {
+    console.error(`❌ Error publicando evento ${routingKey}:`, error.message);
+    throw error;
   }
 }
 
-module.exports = { connect, publish, isConnected, EventTypes };
+/**
+ * Cerrar conexión con RabbitMQ (graceful shutdown)
+ */
+async function closeRabbitMQ() {
+  try {
+    if (channel) {
+      await channel.close();
+      console.log('✅ Canal RabbitMQ cerrado');
+    }
+    if (connection) {
+      await connection.close();
+      console.log('✅ Conexión RabbitMQ cerrada');
+    }
+  } catch (error) {
+    console.error('❌ Error cerrando RabbitMQ:', error);
+  }
+}
+
+module.exports = {
+  initializeRabbitMQ,
+  publishEvent,
+  closeRabbitMQ,
+  getChannel: () => channel,
+  getConnection: () => connection
+};

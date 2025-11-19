@@ -9,7 +9,7 @@ services:
       DB_HOST: mysql
       DB_PORT: 3306
       DB_USER: usuario
-      DB_PASSWORD: password123
+      DB_PASSWORD: usuario123
       DB_NAME: db_smartride_reservas
       RABBITMQ_URL: amqp://guest:guest@rabbitmq
       RABBITMQ_EXCHANGE: smart_ride_exchange
@@ -29,10 +29,10 @@ services:
     container_name: rideservice-mysql
     restart: always
     environment:
-      MYSQL_ROOT_PASSWORD: password123
+      MYSQL_ROOT_PASSWORD: usuario123
       MYSQL_DATABASE: db_smartride_reservas
       MYSQL_USER: usuario
-      MYSQL_PASSWORD: password123
+      MYSQL_PASSWORD: usuario123
     ports:
       - "3306:3306"
     volumes:
@@ -40,7 +40,7 @@ services:
     networks:
       - smartride-network
     healthcheck:
-      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "usuario", "-password123"]
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "usuario", "-usuario123"]
       interval: 10s
       timeout: 5s
       retries: 5
