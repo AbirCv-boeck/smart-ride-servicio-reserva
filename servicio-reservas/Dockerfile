@@ -14,7 +14,7 @@ RUN npm install --production=false && \
 # Stage 2: Build (si fuera TypeScript, aquí iría)
 # Para JavaScript puro, esta etapa es opcional
 # ========================================
-FROM node:22-alpine AS build
+FROM node:22-alpine AS builder
 
 WORKDIR /app
 
@@ -27,28 +27,23 @@ COPY src ./src
 # ========================================
 FROM node:22-alpine AS production
 
-# Crear usuario no-root
-RUN addgroup -g 1001 -S nodejs && \
-    adduser -S smartride -u 1001 -G nodejs
-
-# Instalar wget para healthcheck
-RUN apk add --no-cache wget
-
 WORKDIR /app
 
-# Copiar archivos necesarios
-COPY --from=build --chown=smartride:nodejs /app/node_modules ./node_modules
-COPY --from=build --chown=smartride:nodejs /app/package*.json ./
-COPY --from=build --chown=smartride:nodejs /app/src ./src
+# Copiar node_modules y código
+COPY --from=builder /app/node_modules ./node_modules
+COPY --from=builder /app/package*.json ./
+COPY --from=builder /app/src ./src
 
-USER smartride
+# Crear directorio proto (se montará como volumen)
+RUN mkdir -p /app/proto
 
-EXPOSE 3002
+# Usuario no privilegiado
+RUN addgroup -g 1001 -S nodejs && \
+    adduser -S nestjs -u 1001 -G nodejs && \
+    chown -R nestjs:nodejs /app
 
-ENV NODE_ENV=production \
-    PORT=3002
+USER nestjs
 
-HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
-    CMD wget --no-verbose --tries=1 --spider http://localhost:3002/health || exit 1
+EXPOSE 3002 50051
 
 CMD ["node", "src/index.js"]

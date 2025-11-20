@@ -59,7 +59,15 @@ async function publishEvent(routingKey, message) {
   }
 
   try {
-    const messageBuffer = Buffer.from(JSON.stringify(message));
+    //  Crear mensaje compatible con Python
+    const payload = {
+      ...message,
+      timestamp: new Date().toISOString(), 
+      service: 'reservas',
+      routing_key: routingKey
+    };
+
+    const messageBuffer = Buffer.from(JSON.stringify(payload));
     
     const published = channel.publish(
       EXCHANGE_NAME,
@@ -68,15 +76,19 @@ async function publishEvent(routingKey, message) {
       {
         persistent: true,
         contentType: 'application/json',
-        timestamp: Date.now(),
-        appId: 'reservas-service'
+        deliveryMode: 2, 
+        headers: {
+          'x-source': 'reservas-service',
+          'x-routing-key': routingKey
+        }
       }
     );
 
     if (published) {
       console.log(`📤 Evento publicado: ${routingKey}`, {
         exchange: EXCHANGE_NAME,
-        messageId: message.id_viaje || 'N/A'
+        messageId: message.id_viaje || 'N/A',
+        payload: JSON.stringify(payload).substring(0, 100) + '...'
       });
     } else {
       console.warn('⚠️ Buffer lleno. Evento en cola:', routingKey);

@@ -3,6 +3,31 @@ const { Viaje } = require('../entities/viaje.js');
 const { ReservaHistorial } = require('../entities/reservaHistorial.js');
 const { record: recordHistory, getByRideId } = require('./historyService');
 const { publishEvent } = require('../services/eventService');
+const { UsersClient } = require('../clients/usersClient'); // ✅ IMPORTAR CLIENTE HTTP
+
+/**
+ *  HELPER: Obtener id_conductor desde id_usuario (vía HTTP a Users Service)
+ * @param {number} id_usuario - ID del usuario
+ * @returns {Promise<number|null>} ID del conductor o null
+ */
+async function getConductorIdByUserId(id_usuario) {
+  try {
+    console.log(`🔍 [GET_CONDUCTOR] Consultando Users Service para usuario ${id_usuario}`);
+    
+    const conductorData = await UsersClient.getConductorByUserId(id_usuario);
+    
+    if (!conductorData) {
+      console.warn(`⚠️ [GET_CONDUCTOR] No se encontró conductor para usuario ${id_usuario}`);
+      return null;
+    }
+
+    console.log(`✅ [GET_CONDUCTOR] Usuario ${id_usuario} → Conductor ${conductorData.id_conductor}`);
+    return conductorData.id_conductor;
+  } catch (error) {
+    console.error(`❌ [GET_CONDUCTOR] Error obteniendo id_conductor para usuario ${id_usuario}:`, error.message);
+    return null;
+  }
+}
 
 /**
  * Lógica para manejar transiciones de estado del viaje:
@@ -15,15 +40,27 @@ class StateService {
   /**
    * Conductor acepta un viaje
    * @param {number} id_viaje - ID del viaje
-   * @param {number} conductorId - ID del conductor
+   * @param {number} id_usuario_conductor - ID del USUARIO conductor (del JWT)
    * @returns {Promise<Object>} Viaje actualizado
    */
-  static async acceptRide(id_viaje, conductorId) {
+  static async acceptRide(id_viaje, id_usuario_conductor) {
     const queryRunner = AppDataSource.createQueryRunner();
     await queryRunner.connect();
 
     try {
       await queryRunner.startTransaction();
+
+      // Obtener id_conductor vía HTTP
+      const id_conductor = await getConductorIdByUserId(id_usuario_conductor);
+      
+      if (!id_conductor) {
+        throw { 
+          status: 404, 
+          message: `No se encontró perfil de conductor para usuario ${id_usuario_conductor}` 
+        };
+      }
+
+      console.log(`🔍 [ACCEPT_RIDE] Usuario ${id_usuario_conductor} → Conductor ${id_conductor}`);
 
       const viaje = await queryRunner.manager
         .createQueryBuilder(Viaje, 'v')
@@ -42,12 +79,11 @@ class StateService {
         };
       }
 
-      // Asignar conductor y actualizar estado
-      viaje.id_conductor = conductorId;
+      // Asignar conductor
+      viaje.id_conductor = id_conductor;
       viaje.estado = 'ASIGNADO';
       viaje.fecha_asignacion = new Date();
       
-      //  Especificar entidad al guardar
       await queryRunner.manager.save(Viaje, viaje);
 
       // Registrar en historial
@@ -55,8 +91,8 @@ class StateService {
       const historialEntry = historialRepo.create({
         viaje: { id_viaje: viaje.id_viaje },
         accion: 'ASIGNADO',
-        detalle: `Viaje asignado al conductor ${conductorId}`,
-        actor_id: conductorId,
+        detalle: `Viaje asignado al conductor ${id_conductor} (usuario ${id_usuario_conductor})`,
+        actor_id: id_usuario_conductor,
         actor_rol: 'CONDUCTOR'
       });
       await historialRepo.save(historialEntry);
@@ -70,7 +106,7 @@ class StateService {
         fecha_asignacion: viaje.fecha_asignacion
       });
 
-      console.log(`✅ Viaje ${id_viaje} asignado a conductor ${conductorId}`);
+      console.log(`✅ Viaje ${id_viaje} asignado a conductor ${id_conductor}`);
 
       return viaje;
     } catch (err) {
@@ -86,15 +122,27 @@ class StateService {
   /**
    * Conductor inicia un viaje
    * @param {number} id_viaje - ID del viaje
-   * @param {number} conductorId - ID del conductor
+   * @param {number} id_usuario_conductor - ID del USUARIO conductor (del JWT)
    * @returns {Promise<Object>} Viaje actualizado
    */
-  static async startRide(id_viaje, conductorId) {
+  static async startRide(id_viaje, id_usuario_conductor) {
     const queryRunner = AppDataSource.createQueryRunner();
     await queryRunner.connect();
 
     try {
       await queryRunner.startTransaction();
+
+      // : Obtener id_conductor vía HTTP
+      const id_conductor = await getConductorIdByUserId(id_usuario_conductor);
+      
+      if (!id_conductor) {
+        throw { 
+          status: 404, 
+          message: `No se encontró perfil de conductor para usuario ${id_usuario_conductor}` 
+        };
+      }
+
+      console.log(`🔍 [START_RIDE] Usuario ${id_usuario_conductor} → Conductor ${id_conductor}`);
 
       const viaje = await queryRunner.manager
         .createQueryBuilder(Viaje, 'v')
@@ -106,10 +154,11 @@ class StateService {
         throw { status: 404, message: 'Viaje no encontrado' };
       }
 
-      if (viaje.id_conductor !== conductorId) {
+      //  VALIDAR con id_conductor (NO con id_usuario)
+      if (viaje.id_conductor !== id_conductor) {
         throw { 
           status: 403, 
-          message: 'Conductor no autorizado para iniciar este viaje' 
+          message: `Conductor no autorizado. Viaje asignado a conductor ${viaje.id_conductor}, recibido ${id_conductor}` 
         };
       }
 
@@ -123,7 +172,6 @@ class StateService {
       viaje.estado = 'EN_PROGRESO';
       viaje.fecha_inicio = new Date();
       
-      //  Especificar entidad
       await queryRunner.manager.save(Viaje, viaje);
 
       // Registrar en historial
@@ -131,8 +179,8 @@ class StateService {
       const historialEntry = historialRepo.create({
         viaje: { id_viaje: viaje.id_viaje },
         accion: 'INICIADO',
-        detalle: `Viaje iniciado por conductor ${conductorId}`,
-        actor_id: conductorId,
+        detalle: `Viaje iniciado por conductor ${id_conductor} (usuario ${id_usuario_conductor})`,
+        actor_id: id_usuario_conductor,
         actor_rol: 'CONDUCTOR'
       });
       await historialRepo.save(historialEntry);
@@ -161,15 +209,27 @@ class StateService {
   /**
    * Conductor finaliza el viaje
    * @param {number} id_viaje - ID del viaje
-   * @param {number} conductorId - ID del conductor
+   * @param {number} id_usuario_conductor - ID del USUARIO conductor (del JWT)
    * @returns {Promise<Object>} Viaje actualizado
    */
-  static async finishRide(id_viaje, conductorId) {
+  static async finishRide(id_viaje, id_usuario_conductor) {
     const queryRunner = AppDataSource.createQueryRunner();
     await queryRunner.connect();
 
     try {
       await queryRunner.startTransaction();
+
+      //: Obtener id_conductor vía HTTP
+      const id_conductor = await getConductorIdByUserId(id_usuario_conductor);
+      
+      if (!id_conductor) {
+        throw { 
+          status: 404, 
+          message: `No se encontró perfil de conductor para usuario ${id_usuario_conductor}` 
+        };
+      }
+
+      console.log(`🔍 [FINISH_RIDE] Usuario ${id_usuario_conductor} → Conductor ${id_conductor}`);
 
       const viaje = await queryRunner.manager
         .createQueryBuilder(Viaje, 'v')
@@ -181,10 +241,11 @@ class StateService {
         throw { status: 404, message: 'Viaje no encontrado' };
       }
 
-      if (viaje.id_conductor !== conductorId) {
+      // VALIDAR con id_conductor (NO con id_usuario)
+      if (viaje.id_conductor !== id_conductor) {
         throw { 
           status: 403, 
-          message: 'Conductor no autorizado para finalizar este viaje' 
+          message: `Conductor no autorizado. Viaje asignado a conductor ${viaje.id_conductor}, recibido ${id_conductor}` 
         };
       }
 
@@ -198,7 +259,6 @@ class StateService {
       viaje.estado = 'COMPLETADO';
       viaje.fecha_fin = new Date();
       
-      //  Especificar entidad
       await queryRunner.manager.save(Viaje, viaje);
 
       // Registrar en historial
@@ -206,8 +266,8 @@ class StateService {
       const historialEntry = historialRepo.create({
         viaje: { id_viaje: viaje.id_viaje },
         accion: 'FINALIZADO',
-        detalle: `Viaje finalizado por conductor ${conductorId}`,
-        actor_id: conductorId,
+        detalle: `Viaje finalizado por conductor ${id_conductor} (usuario ${id_usuario_conductor})`,
+        actor_id: id_usuario_conductor,
         actor_rol: 'CONDUCTOR'
       });
       await historialRepo.save(historialEntry);
@@ -259,38 +319,26 @@ class StateService {
       }
 
       if (viaje.id_cliente !== pasajeroId) {
-        throw { 
-          status: 403, 
-          message: 'Solo el pasajero que creó la reserva puede cancelarla' 
-        };
+        throw { status: 403, message: 'Solo el pasajero puede cancelar este viaje' };
       }
 
-      if (['COMPLETADO', 'CANCELADO'].includes(viaje.estado)) {
+      if (['EN_PROGRESO', 'COMPLETADO'].includes(viaje.estado)) {
         throw { 
           status: 409, 
           message: `No se puede cancelar un viaje en estado '${viaje.estado}'` 
         };
       }
 
-      if (viaje.estado === 'EN_PROGRESO') {
-        throw { 
-          status: 409, 
-          message: 'No se puede cancelar un viaje que ya está en progreso' 
-        };
-      }
-
       viaje.estado = 'CANCELADO';
-      viaje.motivo_cancelacion = motivo || 'Cancelado por pasajero';
+      viaje.motivo_cancelacion = motivo;
       
-      //  Especificar entidad
       await queryRunner.manager.save(Viaje, viaje);
 
-      // Registrar en historial
       const historialRepo = queryRunner.manager.getRepository(ReservaHistorial);
       const historialEntry = historialRepo.create({
         viaje: { id_viaje: viaje.id_viaje },
         accion: 'CANCELADO',
-        detalle: `Reserva cancelada. Motivo: ${viaje.motivo_cancelacion}`,
+        detalle: `Viaje cancelado por pasajero: ${motivo}`,
         actor_id: pasajeroId,
         actor_rol: 'PASAJERO'
       });
@@ -301,7 +349,8 @@ class StateService {
       publishEvent('ride.viaje_cancelado', {
         id_viaje: viaje.id_viaje,
         id_cliente: viaje.id_cliente,
-        motivo: viaje.motivo_cancelacion
+        motivo: motivo,
+        timestamp: new Date()
       });
 
       console.log(`✅ Viaje ${id_viaje} cancelado`);

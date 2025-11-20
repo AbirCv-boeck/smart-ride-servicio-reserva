@@ -16,9 +16,14 @@ const preferenceRoutes = require('./routes/preferenceRoutes');
 
 const { initializeRabbitMQ, closeRabbitMQ } = require('./events/publisher');
 const { startWorker } = require('./events/worker');
+const { startGrpcServer } = require('./grpc/server');
 
 const app = express();
 const PORT = process.env.PORT || 3002;
+const GRPC_PORT = process.env.GRPC_PORT || 50051;
+
+//  Definir RABBITMQ_URL desde variables de entorno
+const RABBITMQ_URL = process.env.RABBITMQ_URL || 'amqp://guest:guest@rabbitmq:5672';
 
 // ==========================================
 // MIDDLEWARES GLOBALES
@@ -44,7 +49,6 @@ apiV1Router.use('/rides', rideRoutes);
 apiV1Router.use('/rides/state', stateRoutes);
 apiV1Router.use('/preferences', preferenceRoutes);
 
-// Health check dentro de /api/v1
 apiV1Router.get('/health', (req, res) => {
   res.status(200).json({
     status: 'healthy',
@@ -55,7 +59,6 @@ apiV1Router.get('/health', (req, res) => {
   });
 });
 
-// Montar todas las rutas bajo /api/v1
 app.use('/api/v1', apiV1Router);
 
 // ==========================================
@@ -93,7 +96,6 @@ app.get('/', (req, res) => {
   });
 });
 
-// Health check en raíz (para Docker healthcheck)
 app.get('/health', (req, res) => {
   res.status(200).json({
     status: 'healthy',
@@ -134,30 +136,33 @@ async function startServer() {
     await AppDataSource.initialize();
     console.log('✅ Conexión a MySQL exitosa');
 
-    // 2. Sincronizar entidades (solo en desarrollo)
-    if (process.env.NODE_ENV !== 'production') {
-      await AppDataSource.synchronize();
-      console.log('✅ Esquema de base de datos sincronizado');
-    }
-
-    // 3. Inicializar RabbitMQ
+    // 2. Inicializar RabbitMQ
     console.log('🐰 Conectando a RabbitMQ compartido...');
     await initializeRabbitMQ();
     console.log('✅ Conexión a RabbitMQ exitosa');
 
-    // 4. Iniciar worker de eventos
+    // 3. Iniciar worker de eventos
     console.log('⚙️ Iniciando worker de eventos...');
     await startWorker();
     console.log('✅ Worker de eventos activo');
 
+    // 4. Iniciar servidor gRPC
+    console.log('🔧 Iniciando servidor gRPC...');
+    startGrpcServer(GRPC_PORT);
+    console.log(`✅ Servidor gRPC activo en puerto ${GRPC_PORT}`);
+
     // 5. Iniciar servidor HTTP
     server = app.listen(PORT, () => {
-      console.log(`🌐 Servidor:      http://localhost:${PORT}`);
-      console.log(`📚 Documentación: http://localhost:${PORT}/api/v1/api-docs`);
+      console.log('\n' + '='.repeat(60));
+      console.log('✅ SERVICIO DE RESERVAS INICIADO CORRECTAMENTE');
+      console.log('='.repeat(60));
+      console.log(`🌐 Servidor HTTP: http://localhost:${PORT}`);
+      console.log(`📚 Documentación:  http://localhost:${PORT}/api/v1/api-docs`);
       console.log(`❤️  Health Check:  http://localhost:${PORT}/api/v1/health`);
       console.log(`🔗 API Base URL:  http://localhost:${PORT}/api/v1`);
-      console.log('🐰 RabbitMQ:      amqp://rabbitmq:5672');
-      console.log('');
+      console.log(`🐰 RabbitMQ:      ${RABBITMQ_URL}`);
+      console.log(`🔧 gRPC Server:   0.0.0.0:${GRPC_PORT}`);
+      console.log('='.repeat(60) + '\n');
     });
 
   } catch (error) {
@@ -183,7 +188,6 @@ async function gracefulShutdown() {
   try {
     console.log('🔄 Iniciando cierre graceful...');
 
-    // 1. Cerrar servidor HTTP
     if (server) {
       await new Promise((resolve) => {
         server.close(() => {
@@ -193,10 +197,8 @@ async function gracefulShutdown() {
       });
     }
 
-    // 2. Cerrar RabbitMQ
     await closeRabbitMQ();
 
-    // 3. Cerrar base de datos
     if (AppDataSource.isInitialized) {
       await AppDataSource.destroy();
       console.log('✅ Conexión a MySQL cerrada');

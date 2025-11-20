@@ -14,17 +14,16 @@ async function startWorker() {
       throw new Error('Canal RabbitMQ no disponible');
     }
 
-    // Declarar colas para el servicio de reservas
+    //  SOLO declarar colas para RECIBIR eventos de otros servicios
     for (const queueConfig of Object.values(QUEUE_NAMES)) {
       await channel.assertQueue(queueConfig.name, {
         durable: true,
         arguments: {
-          'x-message-ttl': 86400000, // 24 horas
+          'x-message-ttl': 86400000,
           'x-max-length': 10000
         }
       });
 
-      // Bind queue al exchange con routing keys
       for (const pattern of queueConfig.patterns) {
         await channel.bindQueue(queueConfig.name, EXCHANGE_NAME, pattern);
         console.log(`🔗 Queue '${queueConfig.name}' enlazada con pattern '${pattern}'`);
@@ -59,7 +58,6 @@ async function consumeDispatchEvents(channel) {
 
         console.log(`📥 Evento recibido: ${routingKey}`, content);
 
-        // Procesar según routing key
         switch (routingKey) {
           case 'dispatch.asignacion_confirmada':
             await handleAsignacionConfirmada(content);
@@ -73,19 +71,11 @@ async function consumeDispatchEvents(channel) {
             console.warn(`⚠️ Evento no manejado: ${routingKey}`);
         }
 
-        // ACK del mensaje
         channel.ack(msg);
 
       } catch (error) {
         console.error('❌ Error procesando mensaje:', error);
-        
-        // NACK y requeue si es un error temporal
-        if (error.temporary) {
-          channel.nack(msg, false, true);
-        } else {
-          // No requeue errores permanentes
-          channel.nack(msg, false, false);
-        }
+        channel.nack(msg, false, false);
       }
     },
     {
@@ -112,36 +102,16 @@ async function handleAsignacionConfirmada(data) {
       throw new Error('Datos incompletos en asignacion_confirmada');
     }
 
-    const viajeRepo = AppDataSource.getRepository(Viaje);
-    const viaje = await viajeRepo.findOne({ where: { id_viaje } });
-
-    if (!viaje) {
-      console.warn(`⚠️ Viaje ${id_viaje} no encontrado`);
-      return;
-    }
-
-    if (viaje.estado !== 'PENDIENTE') {
-      console.warn(`⚠️ Viaje ${id_viaje} no está pendiente (estado: ${viaje.estado})`);
-      return;
-    }
-
-    // Actualizar viaje
-    viaje.id_conductor = id_conductor;
-    viaje.estado = 'ASIGNADO';
-    viaje.fecha_asignacion = new Date();
-
-    await viajeRepo.save(viaje);
-
-    // Registrar en historial
+    // : Solo registrar en historial (el gRPC YA asignó)
     await record({
       id_viaje,
-      accion: 'ASIGNADO_POR_DESPACHO',
-      detalle: `Conductor ${id_conductor} asignado automáticamente por el servicio de despacho`,
+      accion: 'CONFIRMACION_DESPACHO',
+      detalle: `Despacho confirmó asignación de conductor ${id_conductor}`,
       actor_id: null,
       actor_rol: 'SISTEMA'
     });
 
-    console.log(`✅ Viaje ${id_viaje} asignado a conductor ${id_conductor} vía Despacho`);
+    console.log(`✅ Confirmación de Despacho registrada para viaje ${id_viaje}`);
 
   } catch (error) {
     console.error('❌ Error en handleAsignacionConfirmada:', error);
@@ -150,11 +120,10 @@ async function handleAsignacionConfirmada(data) {
 }
 
 /**
- * Handler: Conductor disponible (para futura lógica)
+ * Handler: Conductor disponible
  */
 async function handleConductorDisponible(data) {
   console.log('ℹ️ Conductor disponible:', data);
-  // TODO: Implementar lógica si es necesario
 }
 
 module.exports = {
